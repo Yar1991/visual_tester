@@ -1,0 +1,116 @@
+{
+  "name": "Visual Testing - Updater",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "update-baseline",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ae35d0af-370c-40c8-bef6-45d2362fedc4",
+      "name": "Webhook",
+      "webhookId": "e4d724b1-d112-47bc-a08b-a3aa19e2875e"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst slug = $input.item.json.query.slug;\n\n// Security: Validate slug to prevent directory traversal\nif (!slug || !/^[a-zA-Z0-9\\-_.]+$/.test(slug)) {\n  throw new Error(\"Invalid or missing slug\");\n}\n\nconst sourcePath = `/files/new_screenshots/new_${slug}.webp`;\nconst destPath = `/files/baseline_screenshots/baseline_${slug}.webp`;\n\ntry {\n  if (fs.existsSync(sourcePath)) {\n    fs.copyFileSync(sourcePath, destPath);\n    return { json: { status: \"success\", slug: slug, message: \"Baseline updated\" } };\n  } else {\n    throw new Error(\"Source file not found\");\n  }\n} catch (error) {\n  throw new Error(`Failed to copy file: ${error.message}`);\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "5b538eba-f022-42a1-b4e4-7f5f2298d621",
+      "name": "Copy New Screenshot To Baseline"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"slug\": \"{{ $json.query.slug }}\"\n}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        208,
+        240
+      ],
+      "id": "631b70a3-e29c-485c-a96f-506393885a85",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const expectedToken = $env.UPDATE_BASELINE_TOKEN;\nconst query = $input.item.json.query;\n\nif (!query || !query.token || query.token !== expectedToken) {\n  throw new Error(\"Unauthorized: Invalid or missing token.\");\n}\n\nreturn $input.item;"
+      },
+      "name": "Check Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "check-token-node-id"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Token",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Token": {
+      "main": [
+        [
+          {
+            "node": "Copy New Screenshot To Baseline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "JiKmoKY9F1bSe9XW",
+    "saveDataSuccessExecution": "all"
+  },
+  "versionId": "1c6d9ffe-b196-4545-8813-2823eee712ad",
+  "meta": {
+    "instanceId": "c78c3b0adaefda3b8e09f07201d628d83580d7344cdbe1a22bc104845c66a746"
+  },
+  "id": "PUVxCM0kV2Um7rbs",
+  "tags": []
+}

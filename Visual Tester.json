@@ -1,0 +1,1093 @@
+{
+  "name": "Visual Tester",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://browserless:3000/function",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "={{ $('Loop Over Items').item.json.userAgent }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    \"code\": `export default async ({ page, context }) => {\n      try {\n        // 1. Set Viewport\n        await page.setViewport({ width: context.width, height: context.height });\n  \n        // 2. Go to URL\n        await page.goto(context.url, { waitUntil: 'load', timeout: 60000 });\n  \n        // 3. Wait 5 seconds\n        await new Promise(resolve => setTimeout(resolve, 10000));\n      \n        // 4. Return Screenshot\n        return await page.screenshot({ fullPage: true, type: 'webp', 'quality': 99 });\n      } catch (error) {\n        console.error(\"Main screenshot failed:\", error);\n\n        try {\n          // FALLBACK: If fullPage crashes (common on mobile), take a simple viewport screenshot\n          // This ensures the node DOES NOT CRASH n8n\n          return await page.screenshot({ fullPage: false, type: 'webp', quality: 80 });\n        } catch (filesaveError) {\n           // LAST RESORT: Return a tiny empty image so the workflow continues\n           // (This is a 1x1 transparent pixel)\n           return Buffer.from(\"R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7\", \"base64\");\n        }\n      }\n    };`,\n    \"context\": {\n      \"url\": $('Loop Over Items').item.json.url,\n      \"width\": $('Loop Over Items').item.json.viewportWidth,\n      \"height\": $('Loop Over Items').item.json.viewportHeight\n    }\n  }\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "new_screenshot"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -640,
+        464
+      ],
+      "id": "8df223ba-9544-41ce-ad3e-1e4e8017e32c",
+      "name": "Take Screenshot",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $('Loop Over Items').item.json.baselinePath }}",
+        "options": {
+          "dataPropertyName": "baseline_screenshot"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        464
+      ],
+      "id": "a8a5e3bb-cf5a-44af-961c-f80e2e201d69",
+      "name": "Read Baseline Screenshot",
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://browserless:3000/screenshot",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    \"html\": $json.html,\n    \"options\": {\n      \"type\": \"jpeg\",\n      \"quality\": 90,\n      \"fullPage\": true\n    },\n    \"viewport\": {\n      \"width\": $('Loop Over Items').item.json.viewportWidth * 2,\n      \"height\": $('Loop Over Items').item.json.viewportHeight\n    }\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1424,
+        464
+      ],
+      "id": "2126fd11-ebc1-4cb6-be8f-347103425603",
+      "name": "Stitch Images",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.TARGET_WEBSITE_URL}}/sitemap.xml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -3328,
+        640
+      ],
+      "id": "4f227bfa-36f8-43b5-82b9-46956ff6f13b",
+      "name": "Fetch Sitemap",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "urlset.url",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -2768,
+        640
+      ],
+      "id": "f0ec8929-7e9a-4d6a-881c-da7b8310750a",
+      "name": "Split Out URLs",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        -3040,
+        640
+      ],
+      "id": "2b99e776-566d-4f93-a7b7-ac1d57ced6e0",
+      "name": "Sitemap to JSON",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const url = item.json.loc; // 'loc' is the standard key in sitemaps\n\n// 1. Generate Slug (Filename)\n// - Remove 'https://'\n// - Replace '/' with '-'\n// - Handle Homepage\nlet slug = url.replace(/^https?:\\/\\//, '').replace(/\\/$/, '');\nslug = slug.replace(/lovescape.com\\//g, '').replace(/\\//g, '-');\n\nif (slug === \"\" || slug === \"lovescape-com\") slug = \"home\";\n\nreturn {\n  json: {\n    url: url,\n    slug: slug\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2496,
+        640
+      ],
+      "id": "54dce061-9ea4-4309-89bd-5a91ef282c1e",
+      "name": "Convert URLs to slugs",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.baselinePath }}",
+        "options": {
+          "dataPropertyName": "baselinePath"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -1680,
+        656
+      ],
+      "id": "4f8435e7-0147-4279-92e8-1d5a4e547608",
+      "name": "Check Baseline Files",
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "retryOnFail": false,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "def3567c-10c3-4c47-9bb6-2986f2ac1652",
+              "leftValue": "={{ !!$binary.baselinePath }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1408,
+        656
+      ],
+      "id": "0e97c89c-beef-4f48-96fd-591fb8c5c71b",
+      "name": "Baseline FIle Exists",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://browserless:3000/function",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "={{ $('Loop Over Items').item.json.userAgent }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    \"code\": `export default async ({ page, context }) => {\n      try {\n        // 1. Set Viewport\n        await page.setViewport({ width: context.width, height: context.height });\n  \n        // 2. Go to URL\n        await page.goto(context.url, { waitUntil: 'load', timeout: 60000 });\n  \n        // 3. Wait for initial load\n        await new Promise(resolve => setTimeout(resolve, 5000));\n  \n        // 4. Return Screenshot\n        return await page.screenshot({ fullPage: true, type: 'webp', 'quality': 99 });\n      } catch (error) {\n        console.error(\"Main screenshot failed:\", error);\n\n        try {\n          // FALLBACK: If fullPage crashes (common on mobile), take a simple viewport screenshot\n          // This ensures the node DOES NOT CRASH n8n\n          return await page.screenshot({ fullPage: false, type: 'webp', quality: 80 });\n        } catch (filesaveError) {\n           // LAST RESORT: Return a tiny empty image so the workflow continues\n           // (This is a 1x1 transparent pixel)\n           return Buffer.from(\"R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7\", \"base64\");\n        }\n      }\n    };`,\n    \"context\": {\n      \"url\": $('Loop Over Items').item.json.url,\n      \"width\": $('Loop Over Items').item.json.viewportWidth,\n      \"height\": $('Loop Over Items').item.json.viewportHeight\n    }\n  }\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "new_screenshot"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1024,
+        800
+      ],
+      "id": "5d4bc8e0-61f0-4e1d-b2fb-9fc4a8c1ccd0",
+      "name": "New Page Screenshot",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1952,
+        640
+      ],
+      "id": "72a05fed-5dda-44e5-a170-2661bfa25186",
+      "name": "Loop Over Items",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Loop Over Items').item.json.baselinePath }}",
+        "dataPropertyName": "new_screenshot",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        784
+      ],
+      "id": "d990564d-1d6c-4fe0-8a2c-ff5275d3f3ea",
+      "name": "Save Baseline",
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    url: $('Loop Over Items').item.json.url,\n    slug: $('Loop Over Items').item.json.slug,\n    device: $('Loop Over Items').item.json.device,\n    status: \"NEW\",\n    reason: \"Baseline Created\"\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        784
+      ],
+      "id": "72e3dc80-b824-43bd-b8b2-8b7cc943f333",
+      "name": "Result: New",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const isPixelsMatched = $('Pixel Diff Check').item.json.pixelMatch;\n\nlet aiData = '';\nlet status = '';\n\nif (!isPixelsMatched) {\n  // Gemini 2.5 structure: candidates[0] -> content -> parts[0] -> text\n  const geminiNode = $('Gemini Vision Check').first();\n  const rawText = geminiNode.json.candidates[0].content.parts[0].text;\n  \n  // The 'text' field contains a string version of the JSON, so we must parse it\n  // Example string: \"{\\n  \\\"status\\\": \\\"PASS\\\"\\n}\"\n  aiData = JSON.parse(rawText);\n  if (geminiNode.json.error) {\n    status = \"SKIP\";\n  } else {\n    status = aiData.status === \"FAIL\" && !aiData.reason && !aiData.box ? \"SKIP\" : aiData.status;\n  }\n}\n\n// 2. Output the Clean Result\nreturn {\n  json: {\n    url: $('Loop Over Items').item.json.url,\n    slug: $('Loop Over Items').item.json.slug,\n    device: $('Loop Over Items').item.json.device,\n    status: isPixelsMatched ? \"PASS\" : status,\n    reason: aiData.reason || \"\",\n    box: aiData.box || null,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        464
+      ],
+      "id": "31ae9386-2f06-4ddd-9cf8-7824fe9e1851",
+      "name": "Result: Tested",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allResults = $('Loop Over Items').all(); // Make sure this matches your input node\n\nconst reportGroups = ['desktop', 'mobile'];\nconst outputReports = [];\n\n\nconst publicBaseUrl = $env.WEBHOOK_URL;\nconst webhookUrl = `${$env.WEBHOOK_URL}/webhook/update-baseline`;\n\nfor (const deviceType of reportGroups){\n\n  const groupResults = allResults.filter(item => item.json.device === deviceType);\n  \n  if (groupResults.length === 0) continue;\n  \n  let passUrls = [];\n  let failUrls = [];\n  let skippedUrls = [];\n  let newUrls = [];\n  const date = new Date();\n  const timestamp = date.toISOString().replace(/[:.]/g, '-');\n  const reportFilename = `report-${deviceType}-${timestamp}.html`;\n  const reportFilePath = `/files/reports/${reportFilename}`;\n  const reportPublicUrl = `${publicBaseUrl}/reports/${reportFilename}`;\n  \n  const scriptBlock = `\n  <script>\n    async function acceptBaseline(slug, btnElement) {\n      // 1. Visual Feedback: Show spinner or dim the button\n      const originalText = btnElement.innerText;\n      btnElement.innerText = \"⏳ Updating...\";\n      btnElement.style.opacity = \"0.7\";\n      btnElement.style.pointerEvents = \"none\"; // Prevent double clicks\n  \n      try {\n        // 2. Send Request to n8n (Background)\n        // We add a random timestamp to prevent browser caching\n        const url = \"${webhookUrl}?slug=\" + slug + \"&token=${$env.UPDATE_BASELINE_TOKEN}\";\n        \n        const response = await fetch(url);\n  \n        if (response.ok) {\n          // 3. Success: Replace button with Checkmark\n          const container = btnElement.parentElement;\n          container.innerHTML = '<span style=\"color: #2e7d32; font-weight: bold; font-size: 14px;\">✅ Baseline Updated</span>';\n        } else {\n          throw new Error(\"Server returned \" + response.status);\n        }\n      } catch (error) {\n        // 4. Error: Reset button and alert user\n        console.error(error);\n        alert(\"❌ Failed to update baseline. Check console for details.\");\n        btnElement.innerText = originalText;\n        btnElement.style.opacity = \"1\";\n        btnElement.style.pointerEvents = \"auto\";\n      }\n    }\n  </script>\n  `;\n  \n  // 2. Build the Content\n  for (const item of groupResults) {\n    const data = item.json;\n    const link = `<div style=\"margin-bottom: 8px;\"><strong>URL:</strong> <a href=\"${data.url}\" target=\"_blank\">${data.url}</a></div>`;\n    \n    if (data.status === 'PASS') {\n      const imageUrl = `${publicBaseUrl}/baseline_screenshots/baseline_${data.slug}.webp`\n      passUrls.push(`\n      ${link}\n      <a href=\"${imageUrl}\" target=\"_blank\" title=\"Click to enlarge\">\n        <img src=\"${imageUrl}\" style=\"width: 100%; max-width: 300px; max-height: 300px; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); object-fit: contain\" alt=\"Baseline Image\" />\n      </a>\n      <div style=\"font-size: 11px; color: #999; margin-top: 4px;\">(Click image to enlarge)</div>\n      `);\n    } \n    else if (data.status === 'FAIL') {\n      const filename = data.fileName ? data.fileName.split('/').pop() : 'unknown';\n      // Use the /evidence/ path for the image source\n      const imageUrl = `${publicBaseUrl}/failed_screenshots/${filename}`;\n      const failedScreenshotBlock = !data.reason.startsWith(\"Screenshot crashed\") ? `\n      <a href=\"${imageUrl}\" target=\"_blank\" title=\"Click to enlarge\">\n          <img src=\"${imageUrl}\" style=\"width: 100%; max-width: 300px; max-height: 300px; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); object-fit: contain\" alt=\"Failure Evidence\" />\n        </a>\n        <div style=\"font-size: 11px; color: #999; margin-top: 4px;\">(Click image to enlarge)</div>\n        <div style=\"margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee;\">\n          <button \n              onclick=\"acceptBaseline('${data.slug}', this)\" \n              style=\"\n                background-color: #2e7d32; \n                color: white; \n                border: none;\n                padding: 8px 12px; \n                border-radius: 4px; \n                font-family: sans-serif;\n                font-size: 14px;\n                font-weight: bold;\n                cursor: pointer;\n                transition: background 0.2s;\">\n              Accept New Version\n          </button>\n          <div style=\"font-size: 11px; color: #999; margin-top: 4px;\">(Overwrites baseline)</div>\n        </div>\n      ` : ``;\n  \n      failUrls.push(`\n        ${link}\n        <div style=\"margin-bottom:12px;\"><strong>Reason:</strong> <span style=\"color:red;\">${data.reason}</span></div>\n        ${failedScreenshotBlock}\n      `);\n    }\n    else if (data.status === 'SKIP') {\n      skippedUrls.push(link);\n    }\n    else if (data.status === 'NEW') {\n      newUrls.push(link);\n    }\n  }\n  \n  // 3. Generate HTML\n  const maxRows = Math.max(passUrls.length, failUrls.length, newUrls.length, skippedUrls.length);\n  \n  let html = `\n  <!DOCTYPE html>\n  <html>\n    <head>\n      <meta charset=\"UTF-8\"><title>${deviceType.toUpperCase()} Report</title>\n      ${scriptBlock}\n      <style>\n        body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; background: #f4f6f8; padding: 20px; margin: 0; }\n        table { width: 100%; border-collapse: separate; border-spacing: 0; background: white; }\n        th { border: 1px solid #e1e4e8; padding: 12px; background: #f6f8fa; text-align: left; }\n        td { border: 1px solid #e1e4e8; padding: 15px; background: #fff; vertical-align: top; }\n        .wrapper { border: 1px solid #d1d5da; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }\n        h2 { margin-top: 0; color: #24292e; }\n        a { color: #0366d6; text-decoration: none; }\n        a:hover { text-decoration: underline; }\n        button:hover { background-color: #1b5e20 !important; }\n      </style>\n    </head>\n    <body>\n      <h2>📸 Visual Testing Report: ${deviceType.toUpperCase()}</h2>\n      <p><strong>Date:</strong> ${date.toLocaleString()}</p>\n      \n      <div class=\"wrapper\">\n        <table cellpadding=\"0\" cellspacing=\"0\">\n          <thead>\n              <tr>\n              <th style=\"width: 33%; color: #28a745; border-bottom: 2px solid #28a745;\">✅ PASS (${passUrls.length})</th>\n              <th style=\"width: 33%; color: #cb2431; border-bottom: 2px solid #cb2431;\">❌ FAIL (${failUrls.length})</th>\n              <th style=\"width: 33%; color: #6a737d; border-bottom: 2px solid #6a737d;\">⌛ SKIP (${skippedUrls.length})</th>\n              </tr>\n          </thead>\n          <tbody>\n  `;\n  \n  // 4. Add Rows\n  for (let i = 0; i < maxRows; i++) {\n    const passCell = passUrls[i] || \"\";\n    const failCell = failUrls[i] || \"\";\n    const skipCell = skippedUrls[i] || \"\";\n    \n    html += `\n      <tr>\n          <td>${passCell}</td>\n          <td style=\"background-color: ${failCell ? '#fff5f5' : '#fff'};\">${failCell}</td>\n          <td>${skipCell}</td>\n      </tr>`;\n  }\n  \n  // 5. Close Tags\n  html += `\n          </tbody>\n        </table>\n      </div>\n  `;\n  \n  if (newUrls.length > 0) {\n      html += `<h3>🆕 New Baselines Created</h3><ul>` + newUrls.map(u => `<li>${u}</li>`).join('') + `</ul>`;\n  }\n  \n  html += `</body></html>`;\n  \n  const base64Data = Buffer.from(html);\n  \n  // 6. Return Data for Next Nodes\n  outputReports.push({\n    json: {\n      fileName: reportFilename,\n      filePath: reportFilePath,\n      fileContent: html,\n      publicUrl: reportPublicUrl,\n      // Stats for Slack\n      passedCount: passUrls.length,\n      failedCount: failUrls.length,\n      skippedCount: skippedUrls.length,\n      total: groupResults.length,\n      device: deviceType // Useful for Slack Message Title\n    },\n    binary: {\n      data: {\n        data: base64Data,\n        mimeType: 'text/html',\n        fileName: reportFilename,\n        fileExtension: 'html'\n      }\n    }\n  });\n}\n\nreturn outputReports;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1488,
+        48
+      ],
+      "id": "31894566-4763-4665-b5de-6ec21815fe5e",
+      "name": "Generate Report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://browserless:3000/function",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "=json",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "jsonBody": "={{\n  {\n    \"code\": `export default async ({ page, context }) => {\n      // 1. Inject the HTML directly into the page\n      await page.setContent(context.html);\n      \n      // 2. Set the huge viewport for side-by-side\n      await page.setViewport({ width: ${$('Loop Over Items').item.json.viewportWidth * 2}, height: ${$('Loop Over Items').item.json.viewportHeight} });\n      \n      // 3. Take the screenshot\n      return await page.screenshot({ fullPage: true, type: 'jpeg', 'quality': 90 });\n    };`,\n    \"context\": {\n      \"html\": $('Prepare Failure HTML').first().json.html\n    }\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3280,
+        208
+      ],
+      "id": "960fe1fb-9723-4068-aa10-24a4d81d3e98",
+      "name": "Highlight Fail",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the Gemini Response safely\nconst aiNode = $('Gemini Vision Check').first(); // Update name if needed\n\nconst rawText = aiNode.json.candidates[0].content.parts[0].text;\nconst aiData = JSON.parse(rawText);\n\n// ... The rest of the code (getting Stitch Image and generating HTML) remains EXACTLY the same ...\nconst prepareImageNode = $('Prepare Image').first();\nconst imgBase64 = prepareImageNode.json.base64_image;\nconst box = aiData.box || { top: 0, left: 0, width: 0, height: 0 };\n\n// 4. Generate the HTML String with Pink Overlay\nconst htmlContent = `\n<html>\n  <body style=\"margin:0; padding:0; overflow:hidden; background: #222;\">\n    <img src=\"data:image/jpeg;base64,${imgBase64}\" style=\"width: 100vw; height: 100vh; object-fit: contain;\" />\n    \n    <div style=\"\n      position: absolute;\n      background-color: rgba(247, 0, 41, 0.4); \n      box-shadow: 0 0 8px rgba(255, 20, 147, 0.6);\n      border-radius: 4px;\n      z-index: 999;\n      /* Position based on AI percentages */\n      top: ${box.top}%;\n      left: ${box.left}%;\n      width: ${box.width}%;\n      height: ${box.height}%;\n      /* Ensure clicks pass through to the image below (good practice) */\n      pointer-events: none;\n    \"></div>\n\n  </body>\n</html>\n`;\n\n// 5. Output the HTML for the next node\nreturn {\n  json: {\n    html: htmlContent,\n    reason: aiData.reason,\n    url: $input.first().json.url,\n    slug: $input.first().json.slug,\n    status: $input.first().json.status,\n    device: $input.first().json.device\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3040,
+        208
+      ],
+      "id": "560303d0-e8b7-448c-994d-899c717ecefc",
+      "name": "Prepare Failure HTML",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key={{ $env.AI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    \"contents\": [\n      {\n        \"parts\": [\n          {\n            \"text\": \"You are a Senior QA Engineer responsible for Visual Regression Testing. Your goal is to APPROVE the release (Return PASS) unless you find a critical functional defect.\\n\\n## THE TASK\\nCompare the LEFT image (Baseline) vs. the RIGHT image (New Version). They are separated by a red line.\\n\\n## THE GOLDEN RULE (CONSERVATIVE MODE)\\n**Default to PASS.** Only fail if the difference is OBVIOUS and breaks the user experience. If you have to \\\"squint\\\" or zoom in to see it, it is NOT a bug.\\n\\n## 1. IGNORE THESE (NOISE FILTER)\\n- **Tiny Shifts:** Elements moving 1-5 pixels. (Common in browser rendering).\\n- **Text Thickness:** Fonts looking slightly bolder/thinner (Anti-aliasing).\\n- **Color Vibrance:** Slight changes in hue/brightness (Compression artifacts).\\n- **Dynamic Data:** Timestamps, dates, view counts, random IDs.\\n- **Icons:** Slight pixelation differences in icons.\\n\\n## 2. FLAG THESE (REAL BUGS)\\n- **Missing Content:** A button, image, or paragraph exists on Left but is GONE on Right.\\n- **Broken Layout:** Elements overlapping, crushed, or completely misaligned (e.g., footer floating in the middle of the page).\\n- **Corrupted Media:** Images that look like broken file icons or static noise.\\n- **Text Changes:** Headline text that is completely different (not just a date changing).\\n\\n## THINKING PROCESS (Must be in 'thought_process'):\\n1. **Scan:** Look at the image globally.\\n2. **List Candidates:** Identify potential differences.\\n3. **The Filter:** For each candidate, ask: \\\"Does this prevent a user from using the site?\\\" or \\\"Is this just a rendering quirk?\\\"\\n   - If it's a quirk -> DISCARD.\\n   - If it's a real bug -> KEEP.\\n4. **Verdict:** If NO candidates remain after filtering, the status is PASS.\\n\\n## OUTPUT RULES\\n- If PASS: 'reason' must be 'None' and 'box' must be all 0.\\n- If FAIL: 'reason' must be a short, professional bug report (e.g., 'Submit button missing on right side').\"\n          },\n          {\n            \"inline_data\": {\n              \"mime_type\": $('Prepare Image').first().json.mime_type,\n              \"data\": $('Prepare Image').first().json.base64_image\n            }\n          }\n        ]\n      }\n    ],\n    \"generationConfig\": {\n      \"response_mime_type\": \"application/json\",\n      \"temperature\": 0.0,\n      \"response_schema\": {\n        \"type\": \"OBJECT\",\n        \"required\": [\"thought_process\", \"status\", \"reason\", \"box\"],\n        \"properties\": {\n          \"thought_process\": {\n            \"type\": \"STRING\",\n            \"description\": \"Internal monologue. First, list raw observations. Second, aggressively filter out noise (anti-aliasing, dynamic data). Third, state final verdict.\"\n          },\n          \"status\": {\n            \"type\": \"STRING\",\n            \"enum\": [\"PASS\", \"FAIL\"],\n            \"description\": \"The final verdict. Be conservative. Prefer PASS over FAIL for minor issues.\"\n          },\n          \"reason\": {\n            \"type\": \"STRING\",\n            \"description\": \"If FAIL, concise description of the defect. If PASS, must be the string 'None'.\"\n          },\n          \"box\": {\n            \"type\": \"OBJECT\",\n            \"description\": \"Bounding box of the critical defect (0-100%). All zeros if PASS.\",\n            \"required\": [\"top\", \"left\", \"width\", \"height\"],\n            \"properties\": {\n              \"top\": { \"type\": \"INTEGER\" },\n              \"left\": { \"type\": \"INTEGER\" },\n              \"width\": { \"type\": \"INTEGER\" },\n              \"height\": { \"type\": \"INTEGER\" }\n            }\n          }\n        }\n      }\n    }\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2064,
+        464
+      ],
+      "id": "df896144-37ce-4162-8ea7-8e602579806e",
+      "name": "Gemini Vision Check",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/files/failed_screenshots/highlighted_{{ $('Loop Over Items').item.json.slug }}.jpg",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        3504,
+        208
+      ],
+      "id": "225565a3-dec5-4371-9bdf-55cd168c2e91",
+      "name": "Save Failed",
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "662655dd-fbf2-4c61-92b9-97a05dd8fed0",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "PASS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "27b6ff0e-e5a8-47be-b76a-16e2c07dd574",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "SKIP",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2624,
+        464
+      ],
+      "id": "3c26f711-0870-4248-9643-eab5deccab8f",
+      "name": "If Passed or Skipped",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -3616,
+        640
+      ],
+      "id": "09eb6822-161f-4423-b90c-dd50e2b95095",
+      "name": "Daily Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const fs = require('fs');\n\n// 1. Get file paths directly from the previous items\n// The previous nodes (Read Baseline, Save New Screenshot) should have passed the filenames/paths\n// We can look at 'Loop Over Items' to get the slug, or use the input item.json if we mapped it.\nconst slug = $('Loop Over Items').item.json.slug;\n\n// Construct paths based on our known structure in /files\n// Note: In docker-compose, ./local_files is mapped to /files\nconst baselinePath = `/files/baseline_screenshots/baseline_${slug}.webp`;\nconst newPath = `/files/new_screenshots/new_${slug}.webp`;\n\nlet match = false;\nlet sizeDiff = 0;\n\ntry {\n   // 2. Read files directly from disk as Buffers (NO Base64 conversion needed!)\n   const bufferA = fs.readFileSync(baselinePath);\n   const bufferB = fs.readFileSync(newPath);\n\n   // STEP A: Exact Match\n   if (bufferA.equals(bufferB)) {\n       match = true;\n   } else {\n       // STEP B: Size Tolerance\n       sizeDiff = Math.abs(bufferA.length - bufferB.length);\n       const TOLERANCE_BYTES = 10000;\n\n       if (sizeDiff < TOLERANCE_BYTES) {\n           match = true;\n       }\n   }\n} catch (error) {\n   // If file reading fails (e.g. file not found), treat as no match or handle gracefully\n   console.error(`Error reading files for slug ${slug}:`, error.message);\n   match = false;\n}\n\nreturn {\n     json: {\n          pixelMatch: match,\n          sizeDiff: sizeDiff,\n          slug: slug,\n          url: $('Loop Over Items').item.json.url,\n          device: $('Loop Over Items').item.json.device\n     }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        464
+      ],
+      "id": "167cc7b0-2436-4df9-ba54-849ea114d2d3",
+      "name": "Pixel Diff Check",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e801d8d3-ffc7-4a56-906f-ccba49712f55",
+              "leftValue": "={{ $json.pixelMatch }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        80
+      ],
+      "id": "8de06df0-3def-4458-a4a5-b32f25783d48",
+      "name": "If Pixels Match"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/files/new_screenshots/new_{{ $('Loop Over Items').item.json.slug }}.webp",
+        "dataPropertyName": "new_screenshot",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        32,
+        464
+      ],
+      "id": "a0025692-31ab-4916-b87d-3e1d9d011e5e",
+      "name": "Save New Screenshot"
+    },
+    {
+      "parameters": {
+        "jsCode": "const slug = $('Loop Over Items').item.json.slug;\n\nconst caddyBaseUrl = \"http://caddy\";\n\n// 1. Define URL paths matching your Caddy config\nconst baselineUrl = `${caddyBaseUrl}/baseline_screenshots/baseline_${slug}.webp`;\nconst newUrl = `${caddyBaseUrl}/new_screenshots/new_${slug}.webp`;\n\n// 2. Generate HTML with URL sources instead of Base64\nconst htmlContent = `\n<html style=\"background-color: black;\">\n  <body style=\"margin:0; padding:0; display:flex; width: 100vw; height: 100vh;\">\n    <div style=\"width: 50%; border-right: 5px solid red; overflow: hidden;\">\n      <img src=\"${baselineUrl}\" style=\"width: 100%; height: auto;\" />\n    </div>\n    <div style=\"width: 50%; overflow: hidden;\">\n      <img src=\"${newUrl}\" style=\"width: 100%; height: auto;\" />\n    </div>\n  </body>\n</html>\n`;\n\nreturn [{\n    json: {\n        html: htmlContent\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        464
+      ],
+      "id": "b2ae6a2f-a217-4f78-bf43-5d6007fba893",
+      "name": "Prepare Comparison HTML",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.filePath }}",
+        "dataPropertyName": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -1264,
+        48
+      ],
+      "id": "bfa57a72-8e17-4279-9cbe-37d2a1946f1e",
+      "name": "Save HTML Report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n\t\"blocks\": [\n\t\t{\n\t\t\t\"type\": \"header\",\n\t\t\t\"text\": {\n\t\t\t\t\"type\": \"plain_text\",\n\t\t\t\t\"text\": \":eye-scan2:  New Visual AI Test ({{ $json.device.toUpperCase() }})  :eye-scan2:\",\n\t\t\t\t\"emoji\": true\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"type\": \"divider\"\n\t\t},\n\t\t{\n\t\t\t\"type\": \"section\",\n\t\t\t\"fields\": [\n\t\t\t\t{\n\t\t\t\t\t\"type\": \"mrkdwn\",\n\t\t\t\t\t\"text\": \"*Total*: {{ $('Generate Report').item.json.total }}\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"type\": \"mrkdwn\",\n\t\t\t\t\t\"text\": \"*Passed*: {{ $('Generate Report').item.json.passedCount }}\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"type\": \"mrkdwn\",\n\t\t\t\t\t\"text\": \"*Failed*: {{ $('Generate Report').item.json.failedCount }}\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"type\": \"mrkdwn\",\n\t\t\t\t\t\"text\": \"*Skipped*: {{ $('Generate Report').item.json.skippedCount }}\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\t\"type\": \"divider\"\n\t\t},\n\t\t{\n\t\t\t\"type\": \"actions\",\n\t\t\t\"elements\": [\n\t\t\t\t{\n\t\t\t\t\t\"type\": \"button\",\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"type\": \"plain_text\",\n\t\t\t\t\t\t\"text\": \"View Full Report 📄\",\n\t\t\t\t\t\t\"emoji\": true\n\t\t\t\t\t},\n\t\t\t\t\t\"style\": \"primary\",\n\t\t\t\t\t\"url\": \"{{ $('Generate Report').item.json.publicUrl }}\"\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1040,
+        48
+      ],
+      "id": "402bf5e5-5ca8-4bff-99fa-63dbd1fb6f45",
+      "name": "Send Report to Slack"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Universal Image Reader (Async Wrapper Fix)\nconst binaryPropertyName = 'data'; \nconst helpers = this.helpers; // Capture helper access\n\n// Wrap logic in an async function\nasync function convertImage() {\n  try {\n    // 1. Read the file (Resolves filesystem pointers)\n    // We access item index 0 because we process one image at a time\n    const buffer = await helpers.getBinaryDataBuffer(0, binaryPropertyName);\n\n    // 2. Convert to Base64\n    const base64String = buffer.toString('base64');\n\n    // 3. Output\n    // n8n expects an ARRAY of items\n    return [{\n      json: {\n        base64_image: base64String,\n        mime_type: \"image/png\" // You can make this dynamic if needed\n      }\n    }];\n    \n  } catch (error) {\n    throw new Error(`Failed to read binary data: ${error.message}`);\n  }\n}\n\n// Return the Promise (n8n waits for this automatically)\nreturn convertImage();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        464
+      ],
+      "id": "41ca8c54-c274-4d0c-a6ec-c7f46727006e",
+      "name": "Prepare Image"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Define your modern devices\nconst devices = [\n  { \n    device: 'desktop', \n    width: 1920, \n    height: 1080, \n    // Chrome 133 on Windows\n    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',\n    isMobile: false\n  },\n  { \n    device: 'mobile', \n    // iPhone 15/16 Pro Dimensions\n    width: 393,  \n    height: 852, \n    // Safari on iOS 18.2\n    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/144.0.0.0 Mobile/15E148 Safari/604.1',\n    isMobile: true\n  }\n];\n\nconst items = $(\"Convert URLs to slugs\").all();\nconst newItems = [];\n\n// Loop through every URL coming from the previous node\nfor (const item of items) {\n  for (const config of devices) {\n    // Clone the item so we don't mess up references\n    const newItem = { ...item.json };\n\n    // Add device config to the item\n    newItem.device = config.device;\n    newItem.viewportWidth = config.width;\n    newItem.viewportHeight = config.height;\n    newItem.userAgent = config.userAgent;\n\n    // UPDATE SLUG: Ensure unique filenames for desktop vs mobile\n    // Old: \"homepage\" -> New: \"homepage_desktop\" / \"homepage_mobile\"\n    newItem.slugRaw = newItem.slug;\n    newItem.slug = `${newItem.slug}_${config.device}`;\n    newItem.baselinePath = `/files/baseline_screenshots/baseline_${newItem.slug}.webp`;\n\n    newItems.push({ json: newItem });\n  }\n}\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2224,
+        640
+      ],
+      "id": "2c522cab-3ff4-4fe6-834f-11cb0a8885b1",
+      "name": "Device Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    url: $('Loop Over Items').item.json.url,\n    slug: $('Loop Over Items').item.json.slug,\n    device: $('Loop Over Items').item.json.device,\n    status: \"FAIL\",\n    reason: \"Screenshot crashed (Timeout or Memory)\"\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        1104
+      ],
+      "id": "a6e134af-4924-419b-a673-ec9480d0acda",
+      "name": "Result: Crashed"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "85ca6cc6-1f6f-42fb-9f9f-d45351b1fa8e",
+              "leftValue": "={{ $binary.new_screenshot }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -656,
+        800
+      ],
+      "id": "8de3f5c9-5498-4874-8a86-41ae5dd6777b",
+      "name": "If New Screenshot Is Taken"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ef3b27a7-78cd-478a-8d7b-6b8e89dc2872",
+              "leftValue": "={{ $binary.new_screenshot }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -352,
+        464
+      ],
+      "id": "ad1ea8e5-801e-493f-bea6-dd8c450bd25d",
+      "name": "If Screenshot Is Taken"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Take Screenshot": {
+      "main": [
+        [
+          {
+            "node": "If Screenshot Is Taken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Baseline Screenshot": {
+      "main": [
+        [
+          {
+            "node": "Take Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stitch Images": {
+      "main": [
+        [
+          {
+            "node": "Prepare Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Sitemap": {
+      "main": [
+        [
+          {
+            "node": "Sitemap to JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out URLs": {
+      "main": [
+        [
+          {
+            "node": "Convert URLs to slugs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sitemap to JSON": {
+      "main": [
+        [
+          {
+            "node": "Split Out URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert URLs to slugs": {
+      "main": [
+        [
+          {
+            "node": "Device Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Baseline Files": {
+      "main": [
+        [
+          {
+            "node": "Baseline FIle Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baseline FIle Exists": {
+      "main": [
+        [
+          {
+            "node": "Read Baseline Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "New Page Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Page Screenshot": {
+      "main": [
+        [
+          {
+            "node": "If New Screenshot Is Taken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Generate Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Baseline Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Baseline": {
+      "main": [
+        [
+          {
+            "node": "Result: New",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Result: New": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Result: Tested": {
+      "main": [
+        [
+          {
+            "node": "If Passed or Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Report": {
+      "main": [
+        [
+          {
+            "node": "Save HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Failure HTML": {
+      "main": [
+        [
+          {
+            "node": "Highlight Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Vision Check": {
+      "main": [
+        [
+          {
+            "node": "Result: Tested",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Highlight Fail": {
+      "main": [
+        [
+          {
+            "node": "Save Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Failed": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Passed or Skipped": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Failure HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Sitemap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pixel Diff Check": {
+      "main": [
+        [
+          {
+            "node": "If Pixels Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Pixels Match": {
+      "main": [
+        [
+          {
+            "node": "Result: Tested",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Comparison HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save New Screenshot": {
+      "main": [
+        [
+          {
+            "node": "Pixel Diff Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Comparison HTML": {
+      "main": [
+        [
+          {
+            "node": "Stitch Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report to Slack": {
+      "main": [
+        []
+      ]
+    },
+    "Prepare Image": {
+      "main": [
+        [
+          {
+            "node": "Gemini Vision Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Device Config": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Result: Crashed": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If New Screenshot Is Taken": {
+      "main": [
+        [
+          {
+            "node": "Save Baseline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result: Crashed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Screenshot Is Taken": {
+      "main": [
+        [
+          {
+            "node": "Save New Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result: Crashed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "saveDataSuccessExecution": "all",
+    "errorWorkflow": "JiKmoKY9F1bSe9XW"
+  },
+  "versionId": "981c8105-9142-46bd-814a-a5f26c59d464",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c78c3b0adaefda3b8e09f07201d628d83580d7344cdbe1a22bc104845c66a746"
+  },
+  "id": "0t8Gg1u7FGx8X8vF",
+  "tags": []
+}
