@@ -37,11 +37,11 @@ This project includes two main n8n workflows that are automatically imported:
     -  **Pixel Comparison:** Compares the new screenshot against the existing baseline.
         -   **Exact Match:** Pass.
         -   **Mismatch:** Sends both images to **Gemini Vision AI**.
-    4.  **AI Analysis:** Gemini checks if the difference is a real issue or just rendering noise.
+    -  **AI Analysis:** Gemini checks if the difference is a real issue or just rendering noise.
         -   **Pass:** If the difference is negligible.
         -   **Fail:** If a critical visual bug is detected.
-    5.  **Report Generation:** Creates a detailed HTML report with side-by-side comparisons and highlights.
-    6.  **Notification:** Sends a summary to Slack with a link to the report.
+    -  **Report Generation:** Creates a detailed HTML report with side-by-side comparisons and highlights.
+    -  **Notification:** Sends a summary to Slack with a link to the report.
 
 ### 2. Visual Testing - Updater
 -   **Trigger:** Webhook (called from the HTML Report).
