@@ -1,0 +1,32 @@
+# Environment Variables (Secrets)
+.env
+
+# Docker Data & Config
+n8n_data/
+caddy_data/
+caddy_config/
+postgres_data/
+
+# Local Files & Artifacts
+local_files/
+visual_tester_backup.json
+visual_testing_updater_backup.json
+*.log
+crash.journal
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# OS Specific
+.DS_Store
+
+# Large Binary Files / Source Assets
+extras/
+Inter-4.0.zip
+LICENSE.txt
+web
+fonts
+
+# Gemini Directory
+.gemini/
