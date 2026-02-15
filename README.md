@@ -32,9 +32,9 @@ This project includes two main n8n workflows that are automatically imported:
 -   **Schedule:** Runs daily at 10:00 AM.
 -   **Trigger:** Can also be triggered manually.
 -   **Process:**
-    1.  **Fetch Sitemap:** Retrieves URLs from `TARGET_WEBSITE_URL/sitemap.xml`.
-    2.  **Take Screenshots:** Captures screenshots for both **Desktop** (1920x1080) and **Mobile** (393x852) viewports using Browserless.
-    3.  **Pixel Comparison:** Compares the new screenshot against the existing baseline.
+    -  **Fetch Sitemap:** Retrieves URLs from `TARGET_WEBSITE_URL/sitemap.xml`.
+    -  **Take Screenshots:** Captures screenshots for both **Desktop** (1920x1080) and **Mobile** (393x852) viewports using Browserless.
+    -  **Pixel Comparison:** Compares the new screenshot against the existing baseline.
         -   **Exact Match:** Pass.
         -   **Mismatch:** Sends both images to **Gemini Vision AI**.
     4.  **AI Analysis:** Gemini checks if the difference is a real issue or just rendering noise.
