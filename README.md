@@ -1,3 +1,5 @@
+<img width="2472" height="764" alt="visual" src="https://github.com/user-attachments/assets/f2d9be53-16f7-459c-850f-4e7bee586f3f" />
+
 # Visual Tester
 
 A visual regression testing tool powered by n8n, Browserless, Gemini AI, and Caddy.
