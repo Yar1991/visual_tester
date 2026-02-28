@@ -1,4 +1,4 @@
-<img width="2472" height="764" alt="visual" src="https://github.com/user-attachments/assets/f2d9be53-16f7-459c-850f-4e7bee586f3f" />
+<img width="2174" height="491" alt="workflow" src="https://github.com/user-attachments/assets/b5e98a1e-43c5-447e-9cab-e8ad7a8843b9" />
 
 # Visual Tester
 
