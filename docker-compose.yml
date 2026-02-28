@@ -42,7 +42,7 @@ services:
 
   # 1. n8n - The Logic Engine
   n8n:
-    image: docker.n8n.io/n8nio/n8n
+    build: .
     container_name: n8n-visual-tester
     user: "${UID}:${GID}"
     restart: unless-stopped
@@ -74,6 +74,7 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
       - N8N_LOG_OUTPUT=console
       - NODE_FUNCTION_ALLOW_BUILTIN=fs
+      - NODE_FUNCTION_ALLOW_EXTERNAL=pngjs,pixelmatch
       - NODES_EXCLUDE=[]
       # Environment variables from .env
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
